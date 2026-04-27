@@ -1,0 +1,91 @@
+{
+  "info": {
+    "name": "JarNox Stock Intelligence API",
+    "description": "Postman collection for the JarNox internship assignment API.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:8000", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "Get All Companies",
+      "request": {
+        "method": "GET",
+        "url": "{{base_url}}/companies",
+        "description": "Returns list of all available companies with name and sector."
+      }
+    },
+    {
+      "name": "Get Stock Data (30 days)",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{base_url}}/data/TCS.NS?days=30",
+          "host": ["{{base_url}}"],
+          "path": ["data", "TCS.NS"],
+          "query": [{ "key": "days", "value": "30" }]
+        },
+        "description": "Returns last 30 days of OHLCV + metrics for TCS."
+      }
+    },
+    {
+      "name": "Get Stock Data (90 days)",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{base_url}}/data/INFY.NS?days=90",
+          "host": ["{{base_url}}"],
+          "path": ["data", "INFY.NS"],
+          "query": [{ "key": "days", "value": "90" }]
+        }
+      }
+    },
+    {
+      "name": "Get Summary",
+      "request": {
+        "method": "GET",
+        "url": "{{base_url}}/summary/RELIANCE.NS",
+        "description": "52-week high/low, average close, avg volatility."
+      }
+    },
+    {
+      "name": "Compare Two Stocks",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{base_url}}/compare?symbol1=INFY.NS&symbol2=TCS.NS&days=30",
+          "host": ["{{base_url}}"],
+          "path": ["compare"],
+          "query": [
+            { "key": "symbol1", "value": "INFY.NS" },
+            { "key": "symbol2", "value": "TCS.NS" },
+            { "key": "days", "value": "30" }
+          ]
+        },
+        "description": "Compare two stocks and return Pearson correlation."
+      }
+    },
+    {
+      "name": "Gainers & Losers",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{base_url}}/gainers-losers?days=7",
+          "host": ["{{base_url}}"],
+          "path": ["gainers-losers"],
+          "query": [{ "key": "days", "value": "7" }]
+        },
+        "description": "Top 5 gainers and losers over last 7 days."
+      }
+    },
+    {
+      "name": "Sentiment Index",
+      "request": {
+        "method": "GET",
+        "url": "{{base_url}}/sentiment",
+        "description": "Custom mock sentiment index for all companies."
+      }
+    }
+  ]
+}

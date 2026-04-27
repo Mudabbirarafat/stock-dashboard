@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>JarNox — Stock Intelligence Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+  <style>
+    /* ── Reset & Base ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0d1117;
+      --bg2:       #161b22;
+      --bg3:       #21262d;
+      --border:    #30363d;
+      --text:      #e6edf3;
+      --muted:     #8b949e;
+      --accent:    #58a6ff;
+      --green:     #3fb950;
+      --red:       #f85149;
+      --yellow:    #d29922;
+      --radius:    10px;
+      --shadow:    0 4px 24px rgba(0,0,0,.4);
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Header ── */
+    header {
+      background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky; top: 0; z-index: 100;
+    }
+    .logo { display: flex; align-items: center; gap: 10px; font-size: 1.15rem; font-weight: 700; }
+    .logo span { color: var(--accent); }
+    .header-meta { font-size: .78rem; color: var(--muted); }
+
+    /* ── Layout ── */
+    .layout {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+      height: calc(100vh - 60px);
+    }
+
+    /* ── Sidebar ── */
+    aside {
+      width: 240px;
+      min-width: 200px;
+      background: var(--bg2);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .sidebar-header {
+      padding: 14px 16px 10px;
+      border-bottom: 1px solid var(--border);
+    }
+    .sidebar-header h3 { font-size: .8rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+    .search-box {
+      margin-top: 8px;
+      width: 100%;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      padding: 6px 10px;
+      font-size: .85rem;
+      outline: none;
+    }
+    .search-box:focus { border-color: var(--accent); }
+    .company-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 0;
+    }
+    .company-item {
+      padding: 10px 16px;
+      cursor: pointer;
+      border-left: 3px solid transparent;
+      transition: all .15s;
+    }
+    .company-item:hover { background: var(--bg3); }
+    .company-item.active {
+      border-left-color: var(--accent);
+      background: var(--bg3);
+    }
+    .company-item .sym { font-weight: 600; font-size: .88rem; color: var(--accent); }
+    .company-item .nm  { font-size: .75rem; color: var(--muted); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .company-item .sect { font-size: .68rem; color: var(--yellow); margin-top: 2px; }
+
+    /* ── Main Content ── */
+    main {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+    }
+    .card-title {
+      font-size: .8rem;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: var(--muted);
+      margin-bottom: 14px;
+    }
+
+    /* ── Stats Row ── */
+    .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; }
+    .stat-card {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+    }
+    .stat-label { font-size: .72rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+    .stat-value { font-size: 1.45rem; font-weight: 700; margin-top: 4px; }
+    .stat-sub   { font-size: .75rem; color: var(--muted); margin-top: 2px; }
+    .up   { color: var(--green); }
+    .down { color: var(--red); }
+    .neutral { color: var(--text); }
+
+    /* ── Chart Container ── */
+    .chart-wrap {
+      position: relative;
+      height: 300px;
+    }
+
+    /* ── Filter Tabs ── */
+    .tabs { display: flex; gap: 6px; margin-bottom: 14px; }
+    .tab-btn {
+      padding: 5px 14px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--muted);
+      font-size: .8rem;
+      cursor: pointer;
+      transition: all .15s;
+    }
+    .tab-btn.active, .tab-btn:hover {
+      background: var(--accent);
+      color: #000;
+      border-color: var(--accent);
+    }
+
+    /* ── Compare Section ── */
+    .compare-controls {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+    select, .cmp-btn {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      padding: 7px 12px;
+      font-size: .85rem;
+      outline: none;
+    }
+    select:focus { border-color: var(--accent); }
+    .cmp-btn {
+      background: var(--accent);
+      color: #000;
+      font-weight: 600;
+      cursor: pointer;
+      border-color: var(--accent);
+    }
+    .cmp-btn:hover { opacity: .85; }
+    .corr-badge {
+      padding: 5px 12px;
+      border-radius: 20px;
+      font-size: .8rem;
+      font-weight: 600;
+    }
+
+    /* ── Gainers / Losers ── */
+    .gl-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .gl-list  { list-style: none; }
+    .gl-item  {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 12px;
+      border-radius: 6px;
+      margin-bottom: 6px;
+      background: var(--bg3);
+      font-size: .85rem;
+    }
+    .gl-sym { font-weight: 600; color: var(--text); }
+    .gl-ret { font-weight: 700; }
+    .gl-item.gainer .gl-ret { color: var(--green); }
+    .gl-item.loser  .gl-ret { color: var(--red); }
+
+    /* ── Sentiment ── */
+    .sent-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
+    .sent-card {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      text-align: center;
+    }
+    .sent-sym   { font-size: .82rem; font-weight: 600; color: var(--accent); }
+    .sent-score { font-size: 1.5rem; font-weight: 800; margin: 6px 0; }
+    .sent-lbl   { font-size: .72rem; }
+    .meter {
+      height: 4px;
+      background: var(--border);
+      border-radius: 4px;
+      margin-top: 8px;
+      overflow: hidden;
+    }
+    .meter-fill { height: 100%; border-radius: 4px; transition: width .4s; }
+
+    /* ── Loading / Empty ── */
+    .loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 200px;
+      color: var(--muted);
+      font-size: .9rem;
+    }
+    .spinner {
+      width: 22px; height: 22px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      margin-right: 10px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Tooltip ── */
+    .tooltip {
+      position: fixed;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: .8rem;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity .15s;
+      z-index: 999;
+      max-width: 220px;
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 700px) {
+      aside { display: none; }
+      .gl-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">📈 <span>JarNox</span> Stock Intelligence</div>
+  <div class="header-meta" id="last-updated">Loading data…</div>
+</header>
+
+<div class="layout">
+  <!-- Sidebar -->
+  <aside>
+    <div class="sidebar-header">
+      <h3>Companies</h3>
+      <input class="search-box" id="search" placeholder="Search symbol…" />
+    </div>
+    <div class="company-list" id="company-list">
+      <div class="loading"><div class="spinner"></div> Loading…</div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main>
+    <!-- Summary Stats -->
+    <div id="stats-section" style="display:none">
+      <div class="card-title" id="company-title">Select a company</div>
+      <div class="stats-row" id="stats-row"></div>
+    </div>
+
+    <!-- Price Chart -->
+    <div class="card" id="chart-section" style="display:none">
+      <div class="card-title">Closing Price &amp; 7-Day MA</div>
+      <div class="tabs" id="period-tabs">
+        <button class="tab-btn active" data-days="30">30 D</button>
+        <button class="tab-btn" data-days="90">90 D</button>
+        <button class="tab-btn" data-days="180">180 D</button>
+        <button class="tab-btn" data-days="365">1 Y</button>
+      </div>
+      <div class="chart-wrap"><canvas id="priceChart"></canvas></div>
+    </div>
+
+    <!-- Return Chart -->
+    <div class="card" id="return-section" style="display:none">
+      <div class="card-title">Daily Return (%)</div>
+      <div class="chart-wrap" style="height:180px"><canvas id="returnChart"></canvas></div>
+    </div>
+
+    <!-- Compare -->
+    <div class="card">
+      <div class="card-title">Compare Two Stocks</div>
+      <div class="compare-controls">
+        <select id="cmp1"></select>
+        <span style="color:var(--muted)">vs</span>
+        <select id="cmp2"></select>
+        <select id="cmpDays">
+          <option value="30">30 Days</option>
+          <option value="90">90 Days</option>
+          <option value="180">180 Days</option>
+        </select>
+        <button class="cmp-btn" onclick="runCompare()">Compare</button>
+        <div id="corr-display"></div>
+      </div>
+      <div class="chart-wrap" id="cmp-wrap" style="display:none"><canvas id="compareChart"></canvas></div>
+    </div>
+
+    <!-- Gainers / Losers -->
+    <div class="card">
+      <div class="card-title">Top Gainers &amp; Losers (7-Day)</div>
+      <div class="gl-grid" id="gl-grid">
+        <div class="loading"><div class="spinner"></div></div>
+      </div>
+    </div>
+
+    <!-- Sentiment -->
+    <div class="card">
+      <div class="card-title">Market Sentiment Index (30-Day)</div>
+      <div class="sent-grid" id="sent-grid">
+        <div class="loading"><div class="spinner"></div></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+// ─── Config ────────────────────────────────────────────────────────────────
+const BASE = "";  // Same origin; change to "http://localhost:8000" for dev
+
+// ─── State ─────────────────────────────────────────────────────────────────
+let companies = [];
+let activeSymbol = null;
+let activeDays   = 30;
+let priceChart = null, returnChart = null, compareChart = null;
+
+// ─── Helpers ───────────────────────────────────────────────────────────────
+const $  = id => document.getElementById(id);
+const fmt = (n, d=2) => n == null ? "—" : Number(n).toFixed(d);
+const fmtPct = n => n == null ? "—" : (n >= 0 ? "+" : "") + fmt(n, 2) + "%";
+const clr = n => n > 0 ? "up" : n < 0 ? "down" : "neutral";
+
+async function api(path) {
+  const r = await fetch(BASE + path);
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+// ─── Init ───────────────────────────────────────────────────────────────────
+async function init() {
+  try {
+    companies = await api("/companies");
+    renderSidebar(companies);
+    populateCompareDropdowns();
+    loadGainersLosers();
+    loadSentiment();
+    $("last-updated").textContent = "Updated: " + new Date().toLocaleTimeString();
+    if (companies.length) selectCompany(companies[0].symbol);
+  } catch(e) {
+    $("company-list").innerHTML = `<div class="loading" style="color:var(--red)">API error. Is the backend running?</div>`;
+  }
+}
+
+// ─── Sidebar ────────────────────────────────────────────────────────────────
+function renderSidebar(list) {
+  $("company-list").innerHTML = list.map(c => `
+    <div class="company-item ${c.symbol === activeSymbol ? 'active' : ''}"
+         onclick="selectCompany('${c.symbol}')" id="item-${c.symbol.replace(/\./g,'_')}">
+      <div class="sym">${c.symbol.replace('.NS','')}</div>
+      <div class="nm">${c.name}</div>
+      <div class="sect">${c.sector || ''}</div>
+    </div>`).join('');
+}
+
+$("search").addEventListener("input", e => {
+  const q = e.target.value.toLowerCase();
+  renderSidebar(companies.filter(c =>
+    c.symbol.toLowerCase().includes(q) || c.name.toLowerCase().includes(q)
+  ));
+});
+
+// ─── Select Company ─────────────────────────────────────────────────────────
+async function selectCompany(symbol) {
+  activeSymbol = symbol;
+  document.querySelectorAll(".company-item").forEach(el => el.classList.remove("active"));
+  const el = $("item-" + symbol.replace(/\./g,'_'));
+  if (el) el.classList.add("active");
+
+  $("company-title").textContent = (companies.find(c=>c.symbol===symbol)?.name || symbol) + " — " + symbol;
+  $("stats-section").style.display = "";
+  $("chart-section").style.display  = "";
+  $("return-section").style.display = "";
+
+  await Promise.all([loadSummary(symbol), loadPriceChart(symbol, activeDays)]);
+}
+
+// ─── Summary Stats ──────────────────────────────────────────────────────────
+async function loadSummary(symbol) {
+  try {
+    const s = await api(`/summary/${symbol}`);
+    $("stats-row").innerHTML = `
+      <div class="stat-card">
+        <div class="stat-label">52W High</div>
+        <div class="stat-value up">₹${fmt(s.week52_high)}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">52W Low</div>
+        <div class="stat-value down">₹${fmt(s.week52_low)}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Avg Close</div>
+        <div class="stat-value neutral">₹${fmt(s.avg_close)}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Avg Daily Return</div>
+        <div class="stat-value ${clr(s.avg_daily_return_pct)}">${fmtPct(s.avg_daily_return_pct)}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Avg Volatility</div>
+        <div class="stat-value" style="color:var(--yellow)">${fmt(s.avg_volatility, 2)}%</div>
+        <div class="stat-sub">Annualised</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Data Points</div>
+        <div class="stat-value neutral">${s.total_days}</div>
+        <div class="stat-sub">trading days</div>
+      </div>`;
+  } catch(e) { $("stats-row").innerHTML = `<div class="loading" style="color:var(--red)">Failed to load summary</div>`; }
+}
+
+// ─── Price Chart ────────────────────────────────────────────────────────────
+async function loadPriceChart(symbol, days) {
+  try {
+    const data = await api(`/data/${symbol}?days=${days}`);
+    const reversed = [...data].reverse();
+    const labels  = reversed.map(d => d.date);
+    const closes  = reversed.map(d => d.close);
+    const ma7     = reversed.map(d => d.moving_avg_7);
+    const returns = reversed.map(d => d.daily_return != null ? +(d.daily_return*100).toFixed(4) : null);
+
+    // Price chart
+    if (priceChart) priceChart.destroy();
+    priceChart = new Chart($("priceChart").getContext("2d"), {
+      type: "line",
+      data: {
+        labels,
+        datasets: [
+          {
+            label: "Close",
+            data: closes,
+            borderColor: "#58a6ff",
+            backgroundColor: "rgba(88,166,255,.08)",
+            borderWidth: 2,
+            pointRadius: 0,
+            fill: true,
+            tension: 0.3,
+          },
+          {
+            label: "7-Day MA",
+            data: ma7,
+            borderColor: "#d29922",
+            borderWidth: 1.5,
+            borderDash: [5, 3],
+            pointRadius: 0,
+            fill: false,
+            tension: 0.3,
+          }
+        ]
+      },
+      options: chartOptions("₹")
+    });
+
+    // Return chart
+    if (returnChart) returnChart.destroy();
+    returnChart = new Chart($("returnChart").getContext("2d"), {
+      type: "bar",
+      data: {
+        labels,
+        datasets: [{
+          label: "Daily Return %",
+          data: returns,
+          backgroundColor: returns.map(r => r >= 0 ? "rgba(63,185,80,.7)" : "rgba(248,81,73,.7)"),
+          borderRadius: 2,
+        }]
+      },
+      options: chartOptions("%", true)
+    });
+  } catch(e) { console.error(e); }
+}
+
+function chartOptions(unit = "", minimal = false) {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: { mode: "index", intersect: false },
+    plugins: {
+      legend: { labels: { color: "#8b949e", font: { size: 11 } } },
+      tooltip: {
+        backgroundColor: "#21262d",
+        borderColor: "#30363d",
+        borderWidth: 1,
+        titleColor: "#e6edf3",
+        bodyColor: "#8b949e",
+        callbacks: {
+          label: ctx => ` ${ctx.dataset.label}: ${unit}${ctx.parsed.y?.toFixed(2) ?? "—"}`
+        }
+      }
+    },
+    scales: {
+      x: {
+        ticks: { color: "#8b949e", maxTicksLimit: 8, font: { size: 10 } },
+        grid: { color: "#21262d" }
+      },
+      y: {
+        ticks: { color: "#8b949e", font: { size: 10 },
+          callback: v => unit + (unit === "₹" ? v.toLocaleString() : v.toFixed(2))
+        },
+        grid: { color: "#21262d" }
+      }
+    }
+  };
+}
+
+// Period tabs
+$("period-tabs").addEventListener("click", e => {
+  const btn = e.target.closest(".tab-btn");
+  if (!btn || !activeSymbol) return;
+  document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+  activeDays = +btn.dataset.days;
+  loadPriceChart(activeSymbol, activeDays);
+});
+
+// ─── Compare ────────────────────────────────────────────────────────────────
+function populateCompareDropdowns() {
+  ["cmp1","cmp2"].forEach((id, i) => {
+    $(id).innerHTML = companies.map(c =>
+      `<option value="${c.symbol}">${c.symbol.replace('.NS','')} – ${c.name}</option>`
+    ).join('');
+    if (i === 1 && companies.length > 1) $(id).selectedIndex = 1;
+  });
+}
+
+async function runCompare() {
+  const s1 = $("cmp1").value, s2 = $("cmp2").value;
+  const days = $("cmpDays").value;
+  if (s1 === s2) { alert("Please select two different symbols."); return; }
+  try {
+    const d = await api(`/compare?symbol1=${s1}&symbol2=${s2}&days=${days}`);
+    $("cmp-wrap").style.display = "";
+
+    // Correlation badge
+    const c = d.correlation;
+    const cBg = c > 0.6 ? "rgba(63,185,80,.2)" : c < 0 ? "rgba(248,81,73,.2)" : "rgba(210,153,34,.2)";
+    const cClr = c > 0.6 ? "var(--green)" : c < 0 ? "var(--red)" : "var(--yellow)";
+    $("corr-display").innerHTML = c != null
+      ? `<span class="corr-badge" style="background:${cBg};color:${cClr}">ρ = ${fmt(c, 3)}</span>`
+      : "";
+
+    if (compareChart) compareChart.destroy();
+    compareChart = new Chart($("compareChart").getContext("2d"), {
+      type: "line",
+      data: {
+        labels: d.series1.dates,
+        datasets: [
+          { label: s1.replace('.NS',''), data: d.series1.closes, borderColor:"#58a6ff", borderWidth:2, pointRadius:0, fill:false, tension:.3 },
+          { label: s2.replace('.NS',''), data: d.series2.closes, borderColor:"#3fb950", borderWidth:2, pointRadius:0, fill:false, tension:.3 },
+        ]
+      },
+      options: chartOptions("₹")
+    });
+  } catch(e) { alert("Compare failed: " + e.message); }
+}
+
+// ─── Gainers / Losers ───────────────────────────────────────────────────────
+async function loadGainersLosers() {
+  try {
+    const d = await api("/gainers-losers?days=7");
+    const makeList = (items, cls) => items.map(it => `
+      <li class="gl-item ${cls}">
+        <span class="gl-sym">${it.symbol.replace('.NS','')}</span>
+        <span class="gl-ret">${fmtPct(it.total_return_pct)}</span>
+      </li>`).join('');
+
+    $("gl-grid").innerHTML = `
+      <div>
+        <div style="font-size:.75rem;color:var(--green);font-weight:600;margin-bottom:8px">▲ Top Gainers</div>
+        <ul class="gl-list">${makeList(d.gainers,'gainer')}</ul>
+      </div>
+      <div>
+        <div style="font-size:.75rem;color:var(--red);font-weight:600;margin-bottom:8px">▼ Top Losers</div>
+        <ul class="gl-list">${makeList(d.losers,'loser')}</ul>
+      </div>`;
+  } catch(e) { $("gl-grid").innerHTML = `<div style="color:var(--red);font-size:.85rem">Failed to load</div>`; }
+}
+
+// ─── Sentiment ──────────────────────────────────────────────────────────────
+async function loadSentiment() {
+  try {
+    const data = await api("/sentiment");
+    $("sent-grid").innerHTML = data.map(s => {
+      const clr = s.sentiment_score > 55 ? "var(--green)" : s.sentiment_score < 45 ? "var(--red)" : "var(--yellow)";
+      return `
+        <div class="sent-card">
+          <div class="sent-sym">${s.symbol.replace('.NS','')}</div>
+          <div class="sent-score" style="color:${clr}">${s.sentiment_score}</div>
+          <div class="sent-lbl">${s.label}</div>
+          <div class="meter"><div class="meter-fill" style="width:${s.sentiment_score}%;background:${clr}"></div></div>
+        </div>`;
+    }).join('');
+  } catch(e) { $("sent-grid").innerHTML = `<div style="color:var(--red);font-size:.85rem">Failed to load</div>`; }
+}
+
+// ─── Boot ───────────────────────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>
